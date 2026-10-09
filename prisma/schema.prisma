@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+generator client_extensions {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum Role {
+  user
+  admin
+}
+
+model State {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  places Place[]
+}
+
+model Category {
+  id     String          @id @default(uuid())
+  name   String          @unique
+  icon   String
+  places PlaceCategory[]
+}
+
+model Place {
+  id                String          @id @default(uuid())
+  name              String
+  shortDescription  String
+  longDescription   String
+  // Coordenadas PostGIS (lat/lng). Prisma no modela Geography de forma nativa,
+  // por eso se gestiona con $queryRaw / $executeRaw (ver places.service.ts).
+  latitude           Float
+  longitude          Float
+  address           String
+  stateId           String
+  state             State           @relation(fields: [stateId], references: [id])
+  municipality      String
+  openingHours      String?
+  entryCost         Decimal?
+  relevanceScore    Int             @default(0)
+  isPublished       Boolean         @default(false)
+  images            PlaceImage[]
+  categories        PlaceCategory[]
+  favorites         Favorite[]
+  reviews           Review[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model PlaceCategory {
+  placeId    String
+  categoryId String
+  place      Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, categoryId])
+}
+
+model PlaceImage {
+  id      String @id @default(uuid())
+  placeId String
+  place   Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  url     String
+  order   Int    @default(0)
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         Role       @default(user)
+  favorites    Favorite[]
+  reviews      Review[]
+  createdAt    DateTime   @default(now())
+}
+
+model Favorite {
+  id      String @id @default(uuid())
+  userId  String
+  placeId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  place   Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, placeId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  placeId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  place     Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model PlaceThumbnail {
+  placeId   String   @id
+  place     Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  mime      String
+  data      String   @db.Text // miniatura codificada en Base32
+  updatedAt DateTime @updatedAt
+}
