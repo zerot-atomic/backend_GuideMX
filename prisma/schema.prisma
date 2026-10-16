@@ -32,28 +32,29 @@ model Category {
 }
 
 model Place {
-  id                String          @id @default(uuid())
-  name              String
-  shortDescription  String
-  longDescription   String
+  id               String           @id @default(uuid())
+  name             String
+  shortDescription String
+  longDescription  String
   // Coordenadas PostGIS (lat/lng). Prisma no modela Geography de forma nativa,
   // por eso se gestiona con $queryRaw / $executeRaw (ver places.service.ts).
-  latitude           Float
-  longitude          Float
-  address           String
-  stateId           String
-  state             State           @relation(fields: [stateId], references: [id])
-  municipality      String
-  openingHours      String?
-  entryCost         Decimal?
-  relevanceScore    Int             @default(0)
-  isPublished       Boolean         @default(false)
-  images            PlaceImage[]
-  categories        PlaceCategory[]
-  favorites         Favorite[]
-  reviews           Review[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  latitude         Float
+  longitude        Float
+  address          String
+  stateId          String
+  state            State            @relation(fields: [stateId], references: [id])
+  municipality     String
+  openingHours     String?
+  entryCost        Decimal?
+  relevanceScore   Int              @default(0)
+  isPublished      Boolean          @default(false)
+  images           PlaceImage[]
+  categories       PlaceCategory[]
+  favorites        Favorite[]
+  reviews          Review[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  PlaceThumbnail   PlaceThumbnail[]
 }
 
 model PlaceCategory {
@@ -76,7 +77,8 @@ model PlaceImage {
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
-  passwordHash String
+  passwordHash String?
+  googleId     String?  @unique
   name         String
   role         Role       @default(user)
   favorites    Favorite[]

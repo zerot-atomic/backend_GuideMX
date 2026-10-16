@@ -4,7 +4,8 @@ API REST para **MXGuide**, la app de guía turística de México. Construida
 con **NestJS + Prisma + PostgreSQL (extensión PostGIS)**. Expone lugares
 turísticos, categorías, estados, favoritos, reseñas, miniaturas de lugares
 y autenticación con roles (`user` / `admin`), pensada para que el front
-(Flutter) consuma todo vía JSON.
+(Flutter) consuma todo vía JSON. La autenticación funciona con correo y
+contraseña o con **Google (OAuth 2.0)**.
 
 ---
 
@@ -16,10 +17,12 @@ y autenticación con roles (`user` / `admin`), pensada para que el front
 4. [Arquitectura y estructura de carpetas](#arquitectura-y-estructura-de-carpetas)
 5. [Modelo de datos](#modelo-de-datos)
 6. [Autenticación y roles](#autenticación-y-roles)
-7. [Referencia de Endpoints](#referencia-de-endpoints)
-8. [Seguridad](#seguridad)
-9. [Nota sobre PostGIS](#nota-sobre-postgis)
-10. [Pendientes del equipo](#pendientes-del-equipo)
+7. [Autenticación con Google (OAuth 2.0)](#autenticación-con-google-oauth-20)
+8. [Referencia de Endpoints](#referencia-de-endpoints)
+9. [Seguridad](#seguridad)
+10. [Nota sobre PostGIS](#nota-sobre-postgis)
+11. [Problemas comunes](#problemas-comunes)
+12. [Pendientes del equipo](#pendientes-del-equipo)
 
 ---
 
@@ -28,6 +31,7 @@ y autenticación con roles (`user` / `admin`), pensada para que el front
 - **NestJS 10** (Node + TypeScript)
 - **Prisma 5** como ORM, con **PostgreSQL** + extensión **PostGIS** (búsquedas por cercanía)
 - **JWT** (`@nestjs/jwt` + `passport-jwt`) para autenticación
+- **Google OAuth 2.0** (`passport-google-oauth20`) para iniciar sesión con Google
 - **Cloudinary** para almacenamiento de las imágenes que sube un admin
 - **Wikipedia / Wikimedia Commons** (APIs públicas) para las miniaturas de los lugares, guardadas en la base de datos como texto Base32
 - **class-validator / class-transformer** para validar el body de cada request
@@ -60,7 +64,9 @@ y autenticación con roles (`user` / `admin`), pensada para que el front
    npx prisma generate
    npx prisma migrate dev --name init
    npx prisma migrate dev --name add_place_thumbnail
+   npx prisma migrate dev --name add_google_auth
    ```
+   > Si `migrate dev` avisa de *drift* y pide resetear la base, **responde `no`** (borraría todos los datos) y consulta [Problemas comunes](#problemas-comunes).
 6. Cargar la curaduría inicial (estados, categorías y lugares de ejemplo, incluyendo las ciudades más importantes de México):
    ```bash
    npx prisma db seed
@@ -79,12 +85,24 @@ y autenticación con roles (`user` / `admin`), pensada para que el front
    npm pkg set scripts.sync-images="ts-node prisma/sync-images.ts"
    ```
    Alternativa: llamar a `POST /place-images/sync` con un token de admin (ver [Miniaturas de lugares](#miniaturas-de-lugares-place-images)).
+9. *(Opcional)* Configurar el login con Google: ver [Autenticación con Google](#autenticación-con-google-oauth-20). Sin credenciales de Google el servidor arranca igual; solo `/auth/google` no funcionará.
 
 > **Importante:** todos los comandos de esta guía se corren dentro de la carpeta `backend`, no en la raíz del repo. Si aparece `Could not read package.json`, estás en la carpeta equivocada.
 
 > **Cada quien tiene su propia base de datos.** Mientras el backend no esté en un servidor, cada integrante lo corre local. Las miniaturas y la cuenta de admin no se comparten: hay que repetir los pasos 5 a 8 en cada compu, y volver a correr `npm run sync-images` cuando se agreguen lugares nuevos.
 
-Para probar los endpoints usa **Thunder Client** (extensión de VS Code) o Postman — el navegador solo sirve para los `GET` públicos, no para `POST`/`PATCH`/`DELETE`.
+Para probar los endpoints usa **Thunder Client** (extensión de VS Code) o Postman — el navegador solo sirve para los `GET` públicos y para el flujo de Google (`/auth/google`), no para `POST`/`PATCH`/`DELETE`.
+
+### Si ya tenías el proyecto corriendo y haces `git pull` del cambio de Google
+
+```bash
+npm install
+npx prisma migrate dev --name add_google_auth   # o: npx prisma db push (ver Problemas comunes)
+npx prisma generate
+npm run start:dev
+```
+
+Después, agrega las 3 variables de Google a tu `.env` (pueden quedar vacías si no vas a probar el login con Google).
 
 ---
 
@@ -96,9 +114,12 @@ Para probar los endpoints usa **Thunder Client** (extensión de VS Code) o Postm
 | `JWT_SECRET` | Secreto para firmar los tokens. Mínimo 16 caracteres — el server **no arranca** si falta o es muy corto |
 | `JWT_EXPIRES_IN` | Duración del token, default `7d` |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Credenciales de tu cuenta de Cloudinary (plan gratuito alcanza de sobra) |
+| `GOOGLE_CLIENT_ID` | *(Opcional)* Client ID de OAuth de Google Cloud Console. Puede ir vacío si no usas el login con Google |
+| `GOOGLE_CLIENT_SECRET` | *(Opcional)* Client Secret de OAuth de Google. Puede ir vacío. **Nunca lo subas al repo** |
+| `GOOGLE_CALLBACK_URL` | *(Opcional)* URL de retorno de Google, debe coincidir exactamente con la registrada en Google Cloud. Local: `http://localhost:3000/auth/google/callback` |
 | `PORT` | Puerto del servidor, default `3000` |
 
-Todas se validan al arrancar (`app.module.ts`, con Joi). Si falta una obligatoria, el servidor rehúsa arrancar en vez de fallar a medias más adelante.
+Todas se validan al arrancar (`app.module.ts`, con Joi). Si falta una obligatoria, el servidor rehúsa arrancar en vez de fallar a medias más adelante. Las variables de Google son opcionales (se permiten vacías) para que quien no tenga credenciales pueda levantar el backend sin problema.
 
 ---
 
@@ -108,7 +129,9 @@ Un módulo por entidad, cada uno con su `controller` / `service` / `module` — 
 
 ```
 src/
-├── auth/            # registro, login, JWT, guards de roles
+├── auth/            # registro, login, Google OAuth, JWT, guards de roles
+│   ├── google.strategy.ts      # estrategia de Passport para Google
+│   └── google-auth.guard.ts    # guard que dispara el flujo de Google
 ├── places/          # CRUD de lugares + búsqueda por cercanía (PostGIS)
 ├── categories/       # catálogo de categorías (solo lectura)
 ├── states/           # catálogo de estados de México (solo lectura)
@@ -133,7 +156,7 @@ Entidades principales (ver `prisma/schema.prisma` para el detalle completo):
 - **PlaceImage** — imágenes de un lugar (URL de Cloudinary + orden).
 - **PlaceThumbnail** — miniatura (320 px) de un lugar guardada como texto **Base32** (`data`) junto con su tipo (`mime`). Relación 1 a 1 con `Place`. Se llena sola la primera vez que se pide, o en lote con `POST /place-images/sync`.
 - **PlaceCategory** — tabla intermedia lugar↔categoría (muchos a muchos).
-- **User** — email, password hasheado (bcrypt), nombre, `role` (`user` | `admin`).
+- **User** — email, `passwordHash` (bcrypt, **opcional**: es `null` para quien solo entra con Google), `googleId` (opcional, único), nombre, `role` (`user` | `admin`).
 - **Favorite** — relación usuario↔lugar (un usuario no puede repetir el mismo lugar).
 - **Review** — reseña de un usuario sobre un lugar (rating 1-5 + comentario opcional).
 
@@ -143,7 +166,7 @@ Entidades principales (ver `prisma/schema.prisma` para el detalle completo):
 
 ## Autenticación y roles
 
-- Login/registro regresan `{ "accessToken": "..." }` (JWT).
+- Login/registro (tradicional o con Google) regresan `{ "accessToken": "..." }` (JWT).
 - Mándalo en cada request protegida como header:
   ```
   Authorization: Bearer <accessToken>
@@ -157,6 +180,81 @@ Entidades principales (ver `prisma/schema.prisma` para el detalle completo):
 
 ---
 
+## Autenticación con Google (OAuth 2.0)
+
+### Descripción general
+
+Flujo híbrido: el usuario puede registrarse o iniciar sesión con su cuenta de Google (Passport.js + Google OAuth 2.0) y el backend le entrega **el mismo JWT** que el login tradicional, así que todas las rutas protegidas funcionan igual.
+
+### Componentes
+
+| Archivo | Responsabilidad |
+|---|---|
+| `src/auth/google.strategy.ts` | Estrategia de Passport (`passport-google-oauth20`). Pide los scopes `email` y `profile` y entrega al backend `googleId`, correo, si el correo está verificado y el nombre |
+| `src/auth/google-auth.guard.ts` | Guard (`AuthGuard('google')`) que dispara el flujo |
+| `src/auth/auth.service.ts` → `googleLogin` | Lógica de negocio (ver abajo) |
+| `src/auth/auth.controller.ts` | Endpoints `GET /auth/google` y `GET /auth/google/callback` |
+| `src/auth/auth.module.ts` | Registra `GoogleStrategy` en `providers` |
+| `prisma/schema.prisma` | `User.googleId String? @unique` y `User.passwordHash String?` |
+
+### Lógica de `googleLogin`
+
+1. Rechaza (401) si Google no marca el correo como verificado.
+2. Busca al usuario por `googleId`.
+3. Si no existe, lo busca por correo (sin distinguir mayúsculas):
+   - **Ya existía** (se registró con contraseña) → se **vincula** su cuenta guardando el `googleId`.
+   - **No existe** → se crea con `googleId` y `passwordHash = null`.
+4. Genera el JWT estándar con `buildTokenResponse`.
+
+Los usuarios que solo entran con Google tienen `passwordHash = null`, por lo que `POST /auth/login` los rechaza con `401 Credenciales inválidas` (en vez de fallar con un error 500).
+
+### Endpoints
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| GET | `/auth/google` | Público | Redirige (302) a la pantalla de consentimiento de Google |
+| GET | `/auth/google/callback` | Público | Retorno de Google: procesa al usuario y responde `200` `{ "accessToken": "..." }` |
+
+> Usa la ruta en minúsculas: `/auth/google`.
+
+### Configuración (Google Cloud Console, una sola vez)
+
+1. Entra a [Google Cloud Console](https://console.cloud.google.com/) → **APIs y servicios** → **Credenciales** → **Crear credenciales** → **ID de cliente de OAuth** → tipo **Aplicación web**.
+2. En **URI de redireccionamiento autorizados** agrega, exactamente: `http://localhost:3000/auth/google/callback`
+3. En la **Pantalla de consentimiento**, si está en modo *Testing*, agrega los correos del equipo como **Test users** (si no, Google responde 403 / "app no verificada").
+4. Copia el Client ID y el Client Secret a tu `.env`:
+   ```env
+   GOOGLE_CLIENT_ID=tu_client_id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=tu_client_secret
+   GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+   ```
+5. Reinicia el servidor.
+
+### Comandos usados para implementarlo
+
+```bash
+git checkout -b feature/google-auth
+npm i passport-google-oauth20
+npm i -D @types/passport-google-oauth20
+npx prisma migrate dev --name add_google_auth
+npx prisma generate
+npm run start:dev
+```
+
+### Guía rápida de pruebas
+
+1. Abre en el navegador: `http://localhost:3000/auth/google`.
+2. Elige tu cuenta de Google y concede los permisos.
+3. El navegador muestra un JSON con tu `accessToken`.
+4. En Postman / Thunder Client: `GET http://localhost:3000/auth/me` con el token en **Authorization → Bearer Token**. Debe regresar tu usuario.
+5. Verifica que `POST /auth/register` y `POST /auth/login` sigan funcionando igual.
+
+### Limitación para la app Flutter
+
+El flujo actual (redirección + JSON en el navegador) sirve para probar y para clientes web. En la app móvil lo recomendable es usar el paquete `google_sign_in` para obtener un `idToken` y enviarlo al backend, que lo verificaría con `google-auth-library` y reutilizaría `googleLogin`. Está en [Pendientes del equipo](#pendientes-del-equipo).
+
+---
+
 ## Referencia de Endpoints
 
 **Base URL:** `http://localhost:3000`. Errores siempre con esta forma: `{ statusCode, path, timestamp, message }`. El `ValidationPipe` global rechaza (400) cualquier campo que mandes y no esté en el DTO — solo manda los campos exactos.
@@ -167,6 +265,8 @@ Entidades principales (ver `prisma/schema.prisma` para el detalle completo):
 |---|---|---|---|
 | POST | `/auth/register` | Público | `{ email, password (mín. 6), name }` → `{ accessToken }` |
 | POST | `/auth/login` | Público | `{ email, password }` → `{ accessToken }` |
+| GET | `/auth/google` | Público | Redirige a Google (302). Ver [Autenticación con Google](#autenticación-con-google-oauth-20) |
+| GET | `/auth/google/callback` | Público | Retorno de Google → `{ accessToken }` |
 | GET | `/auth/me` | Logueado | — → `{ id, email, name, role, createdAt }` |
 
 ### Lugares (`/places`)
@@ -249,11 +349,13 @@ Pensando en que la app de Flutter que consume esto puede pasar por revisión de 
 - **Validación de variables de entorno al arrancar** — si falta `DATABASE_URL` o `JWT_SECRET` (o es muy corto), el servidor no arranca.
 - **`whitelist` + `forbidNonWhitelisted`** — cualquier campo extra en el body rechaza el request completo.
 - **Passwords con bcrypt** — nunca se guardan en texto plano.
+- **Google OAuth** — solo se vincula o crea una cuenta si Google marca el correo como verificado, para evitar que alguien tome una cuenta ajena con un correo sin verificar.
 
 Fuera del alcance de este repo (depende de dónde lo despliegues):
 - Servir por **HTTPS** en producción (Railway, Render, Fly.io lo dan gratis con certificado automático).
 - Usar un `JWT_SECRET` largo y aleatorio real en producción (no el de `.env.example`).
-- Confirmar que `.env` esté en `.gitignore` (ya lo está) y nunca se suba por accidente.
+- En producción, registrar en Google Cloud la URL de callback con HTTPS y actualizar `GOOGLE_CALLBACK_URL`.
+- Confirmar que `.env` esté en `.gitignore` (ya lo está) y nunca se suba por accidente; esto incluye `GOOGLE_CLIENT_SECRET`.
 
 ---
 
@@ -268,11 +370,19 @@ El diseño original proponía un campo `location Geography(Point, 4326)`. Prisma
 | Síntoma | Causa y solución |
 |---|---|
 | `Could not read package.json` o `Missing script` | Estás en la carpeta equivocada. Entra a `backend` |
-| El editor marca error en `placeThumbnail` | Falta regenerar el cliente: `npx prisma generate` y reiniciar el servidor TypeScript del editor |
+| El editor marca error en `placeThumbnail` o en `googleId` | Falta regenerar el cliente: `npx prisma generate` y reiniciar el servidor TypeScript del editor |
 | `The relation field ... is missing an opposite relation field` | Falta la línea `thumbnail PlaceThumbnail?` dentro de `model Place` en `schema.prisma` |
 | `GET /place-images` regresa `[]` | Aún no se han cargado las miniaturas: corre `npm run sync-images` |
 | Un lugar sale en la lista de "sin miniatura" | Las APIs no encontraron imagen con ese nombre; hay que ajustar el nombre de búsqueda |
 | `git push` falla con `port 443` | Problema de conexión a GitHub (red, VPN o proxy), no del código |
+| `migrate dev` dice `Drift detected` y pide resetear la base | La base tiene cambios que no están en `prisma/migrations`. **No aceptes el reset** (borra todos los datos). Usa `npx prisma db push` y luego `npx prisma generate` |
+| `db push` avisa de una *unique constraint* en `googleId` | Es inofensivo: la columna es nueva y los usuarios existentes quedan en `NULL`. Acepta la advertencia |
+| `Config validation error: "GOOGLE_CLIENT_ID" is not allowed to be empty` | En `app.module.ts` las variables de Google deben ser `Joi.string().allow('').optional()` |
+| `OAuth2Strategy requires a clientID option` | `google.strategy.ts` debe usar valores de respaldo cuando `GOOGLE_CLIENT_ID` / `SECRET` vienen vacíos |
+| Google muestra `redirect_uri_mismatch` | La URI registrada en Google Cloud no es idéntica a `GOOGLE_CALLBACK_URL` |
+| Google muestra 403 / "app no verificada" | La pantalla de consentimiento está en *Testing*: agrega tu correo como **Test user** |
+| `POST /auth/login` da 401 con un usuario de Google | Esperado: esa cuenta no tiene contraseña. Debe entrar por `/auth/google` |
+| `EPERM` al correr `prisma generate` en Windows | El servidor sigue corriendo y bloquea el cliente de Prisma. Detenlo (Ctrl+C), corre `generate` y vuelve a arrancar |
 
 ---
 
@@ -285,3 +395,5 @@ El diseño original proponía un campo `location Geography(Point, 4326)`. Prisma
 - Evaluar subir el backend a un servidor compartido (Railway, Render o similar) para que todos usen la misma base de datos y no repetir la carga manual en cada PC.
 - Implementar en la app Flutter la copia local de `GET /place-images` (decodificar Base32 y mostrar con `Image.memory`).
 - Revisar que cada lugar del seed obtenga una imagen correcta (`sinImagen` en la respuesta de `sync`) y mostrar el crédito de la fuente.
+- Implementar el login con Google para Flutter: `google_sign_in` en la app + endpoint `POST /auth/google/token` que verifique el `idToken` y reutilice `googleLogin`.
+- Generar y subir al repo una migración para `add_google_auth` (si la base se sincronizó con `db push`, no queda archivo de migración en `prisma/migrations`).

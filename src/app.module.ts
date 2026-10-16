@@ -28,6 +28,9 @@ import { PlaceImagesModule } from './place-images/place-images.module';
         CLOUDINARY_CLOUD_NAME: Joi.string().allow('').optional(),
         CLOUDINARY_API_KEY: Joi.string().allow('').optional(),
         CLOUDINARY_API_SECRET: Joi.string().allow('').optional(),
+        GOOGLE_CLIENT_ID: Joi.string().allow('').optional(),
+        GOOGLE_CLIENT_SECRET: Joi.string().allow('').optional(),
+        GOOGLE_CALLBACK_URL: Joi.string().allow('').optional(),
       }),
     }),
     // Límite de peticiones por IP: 100 requests cada 60 segundos por default.
