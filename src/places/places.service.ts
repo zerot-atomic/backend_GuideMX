@@ -32,7 +32,7 @@ export class PlacesService {
   }
 
   // GET /places/featured
-  findFeatured(limit = 20) {
+  findFeatured(limit = 2000) {
     return this.prisma.place.findMany({
       where: { isPublished: true },
       orderBy: { relevanceScore: 'desc' },
