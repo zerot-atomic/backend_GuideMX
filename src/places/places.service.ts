@@ -11,7 +11,7 @@ export class PlacesService {
   // GET /places/nearby
   // Usamos $queryRaw porque Prisma no soporta funciones geoespaciales
   // de PostGIS (ST_Distance, ST_DWithin) de forma nativa en su query builder.
-  async findNearby({ lat, lng, radius = 25, limit = 20 }: NearbyQueryDto) {
+  async findNearby({ lat, lng, radius = 25, limit = 2000 }: NearbyQueryDto) {
     return this.prisma.$queryRaw`
       SELECT
         id, name, "shortDescription", "relevanceScore",
