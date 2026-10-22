@@ -43,7 +43,7 @@ export class PlacesService {
 
   // GET /places
   findAll(params: { category?: string; stateId?: string; page?: number; limit?: number }) {
-    const { category, stateId, page = 1, limit = 20 } = params;
+    const { category, stateId, page = 1, limit = 2000 } = params;
     return this.prisma.place.findMany({
       where: {
         isPublished: true,
