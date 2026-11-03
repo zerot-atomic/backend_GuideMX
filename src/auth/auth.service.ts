@@ -3,9 +3,12 @@ import {
   ConflictException,
   UnauthorizedException,
   BadRequestException,
+  ServiceUnavailableException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -13,6 +16,9 @@ import { UpdateMeDto } from './dto/update-me.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly googleClient = new OAuth2Client();
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -44,6 +50,50 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
 
     return this.buildTokenResponse(user.id, user.email, user.role);
+  }
+
+  /**
+   * Login con Google para la app móvil: recibe el idToken que entrega el paquete
+   * google_sign_in, lo verifica contra Google (firma, caducidad y audiencia) y
+   * emite el JWT de la app. Cada intento queda en el log.
+   */
+  async googleMobileLogin(idToken: string, ip?: string) {
+    const audience = (process.env.GOOGLE_CLIENT_ID || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (audience.length === 0) {
+      this.logger.error('google-login: GOOGLE_CLIENT_ID no está configurado');
+      throw new ServiceUnavailableException('Login con Google no configurado');
+    }
+
+    let payload;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({ idToken, audience });
+      payload = ticket.getPayload();
+    } catch (e) {
+      this.logger.warn(`google-login FALLIDO ip=${ip ?? '?'} motivo=${(e as Error).message}`);
+      throw new UnauthorizedException('Token de Google inválido');
+    }
+
+    if (!payload?.sub || !payload.email) {
+      this.logger.warn(`google-login FALLIDO ip=${ip ?? '?'} motivo=sin sub/email`);
+      throw new UnauthorizedException('Google no devolvió correo');
+    }
+
+    try {
+      const res = await this.googleLogin({
+        googleId: payload.sub,
+        email: payload.email,
+        name: payload.name || payload.email,
+        emailVerified: payload.email_verified === true,
+      });
+      this.logger.log(`google-login OK ip=${ip ?? '?'} email=${payload.email}`);
+      return res;
+    } catch (e) {
+      this.logger.warn(`google-login RECHAZADO ip=${ip ?? '?'} email=${payload.email} motivo=${(e as Error).message}`);
+      throw e;
+    }
   }
 
   async googleLogin(g: {

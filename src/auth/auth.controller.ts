@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 // import { Req, UseGuards, Get } from '@nestjs/common';
 import { GoogleAuthGuard } from './google-auth.guard';
@@ -22,6 +23,12 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   googleCallback(@Request() req: any) {
     return this.authService.googleLogin(req.user);
+  }
+
+  /** Login con Google para la app móvil (idToken de google_sign_in). */
+  @Post('google')
+  googleMobile(@Body() dto: GoogleLoginDto, @Request() req: any) {
+    return this.authService.googleMobileLogin(dto.idToken, req.ip);
   }
 
   @Post('register')
