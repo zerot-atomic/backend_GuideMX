@@ -13,6 +13,12 @@ export class ReviewsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('reviews/me')
+  findMine(@Request() req) {
+    return this.reviewsService.findMine(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('reviews')
   create(@Request() req, @Body() dto: CreateReviewDto) {
     return this.reviewsService.create(req.user.userId, dto);

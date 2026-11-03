@@ -14,6 +14,14 @@ export class ReviewsService {
     });
   }
 
+  findMine(userId: string) {
+    return this.prisma.review.findMany({
+      where: { userId },
+      include: { place: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   create(userId: string, dto: CreateReviewDto) {
     return this.prisma.review.create({
       data: { userId, placeId: dto.placeId, rating: dto.rating, comment: dto.comment },

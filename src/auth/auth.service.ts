@@ -2,12 +2,14 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 
 @Injectable()
 export class AuthService {
@@ -86,6 +88,40 @@ export class AuthService {
   async me(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
+    });
+  }
+
+  /**
+   * Edita nombre y/o contraseña del usuario logueado.
+   * - Cambiar contraseña exige currentPassword, salvo en cuentas creadas solo con
+   *   Google (passwordHash = null), que pueden fijar su primera contraseña.
+   */
+  async updateMe(userId: string, dto: UpdateMeDto) {
+    if (dto.name === undefined && dto.newPassword === undefined) {
+      throw new BadRequestException('Envía name y/o newPassword');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    const data: { name?: string; passwordHash?: string } = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+
+    if (dto.newPassword !== undefined) {
+      if (user.passwordHash) {
+        if (!dto.currentPassword) {
+          throw new BadRequestException('Falta la contraseña actual');
+        }
+        const ok = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+        if (!ok) throw new UnauthorizedException('La contraseña actual es incorrecta');
+      }
+      data.passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
       select: { id: true, email: true, name: true, role: true, createdAt: true },
     });
   }

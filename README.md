@@ -397,3 +397,101 @@ El diseño original proponía un campo `location Geography(Point, 4326)`. Prisma
 - Revisar que cada lugar del seed obtenga una imagen correcta (`sinImagen` en la respuesta de `sync`) y mostrar el crédito de la fuente.
 - Implementar el login con Google para Flutter: `google_sign_in` en la app + endpoint `POST /auth/google/token` que verifique el `idToken` y reutilice `googleLogin`.
 - Generar y subir al repo una migración para `add_google_auth` (si la base se sincronizó con `db push`, no queda archivo de migración en `prisma/migrations`).
+
+
+
+# MXGuide Backend — Cambios del 3 de noviembre de 2026
+
+Resumen de lo que se corrigió y se agregó para que el backend coincida con el
+commit `519051e` del front (pantallas de perfil, favoritos e insignias por estado).
+
+## Cómo aplicarlo
+
+Copiar los archivos respetando sus rutas y correr, dentro de la carpeta del backend:
+
+```
+npx prisma migrate deploy
+npx prisma generate
+npx prisma validate
+npm run start:dev
+```
+
+> Las migraciones se escribieron a mano. Si `prisma migrate dev` reporta *drift*,
+> revisar el SQL contra `schema.prisma` antes de aceptar un reset.
+
+## 1. Correcciones
+
+| Problema | Archivo | Solución |
+|---|---|---|
+| La migración `initial` tenía `passwordHash NOT NULL` y no tenía `googleId`. El login con Google fallaba en una BD creada desde cero. | `prisma/migrations/20261103000000_add_google_and_thumbnails/migration.sql` | `passwordHash` ahora es opcional y se agrega `googleId` (único). |
+| La tabla `PlaceThumbnail` estaba en el schema pero en ninguna migración. | misma migración | Se crea la tabla con su llave foránea a `Place`. |
+| `DELETE /favorites/:placeId` devolvía 500 si el favorito no existía. | `src/favorites/favorites.service.ts` | Ahora devuelve 404. |
+| `POST /favorites` con un `placeId` inexistente daba error de llave foránea (500). | `src/favorites/favorites.service.ts` | Ahora devuelve 404 `El lugar no existe`. |
+| `.env.example` tenía llaves reales de Cloudinary. | `.env.example` | Campos vacíos. **Pendiente: rotar el secret en Cloudinary**, porque sigue en el historial de git. |
+| `PlacesModule` estaba duplicado en `imports`. | `src/app.module.ts` | Se dejó una sola vez. |
+
+## 2. Endpoints nuevos
+
+### `PATCH /auth/me` (logueado)
+
+Edita nombre y/o contraseña. Body (todos opcionales, pero debe venir al menos `name` o `newPassword`):
+
+```json
+{ "name": "Nuevo nombre", "currentPassword": "actual", "newPassword": "nueva123" }
+```
+
+- Cambiar contraseña exige `currentPassword`, excepto en cuentas creadas solo con Google, que pueden fijar su primera contraseña.
+- Respuestas: 200 con `{ id, email, name, role, createdAt }`, 400 si falta algo, 401 si la contraseña actual es incorrecta.
+- Archivos: `auth.controller.ts`, `auth.service.ts`, `dto/update-me.dto.ts`.
+
+### `GET /reviews/me` (logueado)
+
+Reseñas del usuario, la más reciente primero:
+
+```json
+[{ "id": "...", "rating": 5, "comment": "...", "createdAt": "...", "place": { "id": "...", "name": "..." } }]
+```
+
+- Archivos: `reviews.controller.ts`, `reviews.service.ts`.
+
+### `POST /visits` (logueado)
+
+Registra que el usuario visitó un lugar. Es idempotente. Body: `{ "placeId": "<uuid>" }`.
+
+```json
+{ "placeId": "...", "state": "Puebla", "isNewPlace": true, "isNewState": true }
+```
+
+- `isNewState` en `true` significa que es la primera visita del usuario a ese estado, es decir, insignia nueva.
+- 404 si el lugar no existe.
+
+### `GET /visits/me` (logueado)
+
+```json
+{
+  "visitedPlaces": 3,
+  "visitedStates": ["Puebla", "Oaxaca"],
+  "visits": [{ "placeId": "...", "placeName": "...", "state": "Puebla", "visitedAt": "..." }]
+}
+```
+
+- `visitedStates` trae los nombres de estado tal como están en la tabla `State`. Para que las insignias del front encuentren su imagen, el nombre normalizado debe coincidir con el archivo, por ejemplo `Ciudad de México` → `ciudad_de_mexico.webp`.
+- Archivos nuevos: `src/visits/` (módulo, controlador, servicio, DTO) y la migración `20261103000100_add_visits`.
+
+## 3. Cambios en la base de datos
+
+- `User.googleId` (texto, único, opcional) y `User.passwordHash` pasa a opcional.
+- Tabla `PlaceThumbnail` (`placeId`, `mime`, `data`, `updatedAt`).
+- Tabla `Visit` (`id`, `userId`, `placeId`, `visitedAt`) con único `(userId, placeId)` e índice por `userId`. Se borra en cascada con el usuario o el lugar.
+
+## 4. Pendientes para el front
+
+- `progress_service.dart` hoy guarda las visitas solo en `SharedPreferences`. Falta llamar a `POST /visits` al registrar una visita y a `GET /visits/me` al iniciar sesión.
+- `account_screen.dart`: conectar el formulario de edición a `PATCH /auth/me`.
+- Pantalla de reseñas del perfil: consumir `GET /reviews/me`.
+
+## 5. Seguridad pendiente (acciones manuales)
+
+- Rotar `CLOUDINARY_API_SECRET` en el panel de Cloudinary.
+- Restringir por dominio/referrer la API key de Google Maps que está en `web/index.html` del front (o regenerarla).
+- El login con Google usa el flujo web de Passport (`/auth/google` con redirección). Si la app móvil lo va a usar, hace falta un endpoint que reciba el `idToken` de Google.

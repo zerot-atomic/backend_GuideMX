@@ -52,6 +52,7 @@ model Place {
   categories       PlaceCategory[]
   favorites        Favorite[]
   reviews          Review[]
+  visits           Visit[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   PlaceThumbnail   PlaceThumbnail[]
@@ -83,6 +84,7 @@ model User {
   role         Role       @default(user)
   favorites    Favorite[]
   reviews      Review[]
+  visits       Visit[]
   createdAt    DateTime   @default(now())
 }
 
@@ -113,4 +115,18 @@ model PlaceThumbnail {
   mime      String
   data      String   @db.Text // miniatura codificada en Base32
   updatedAt DateTime @updatedAt
+}
+
+// Lugares que el usuario ha visitado (alimenta las insignias por estado del front).
+// El estado se obtiene del lugar (Place.stateId), por eso no se guarda aquí.
+model Visit {
+  id        String   @id @default(uuid())
+  userId    String
+  placeId   String
+  visitedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  place     Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, placeId])
+  @@index([userId])
 }

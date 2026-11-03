@@ -12,6 +12,7 @@ import { FavoritesModule } from './favorites/favorites.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { PlaceImagesModule } from './place-images/place-images.module';
+import { VisitsModule } from './visits/visits.module';
 
 @Module({
   imports: [
@@ -43,8 +44,8 @@ import { PlaceImagesModule } from './place-images/place-images.module';
     FavoritesModule,
     ReviewsModule,
     UploadsModule,
-    PlacesModule,
     PlaceImagesModule,
+    VisitsModule,
   ],
   providers: [
     {

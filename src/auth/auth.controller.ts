@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 // import { Req, UseGuards, Get } from '@nestjs/common';
 import { GoogleAuthGuard } from './google-auth.guard';
@@ -37,5 +38,11 @@ export class AuthController {
   @Get('me')
   me(@Request() req) {
     return this.authService.me(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  updateMe(@Request() req, @Body() dto: UpdateMeDto) {
+    return this.authService.updateMe(req.user.userId, dto);
   }
 }
