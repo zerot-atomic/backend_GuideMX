@@ -321,6 +321,64 @@ Van como **`multipart/form-data`** (no JSON), con el archivo en un campo llamado
 
 Las miniaturas se guardan en la base de datos como texto Base32 (no como archivos) y no dependen de Cloudinary. Al pedir una que aún no existe, el backend la busca con el nombre del lugar: primero en **Wikipedia en español** y, si no hay resultado, en **Wikimedia Commons**. La app Flutter descarga el listado y lo guarda en su base de datos local para mostrar las imágenes sin internet.
 
+---
+
+## Recuperación de cuenta (`/account-recovery`)
+
+Flujo completo de restablecimiento de contraseña con **auditoría total** en base de datos. Cada acción queda registrada con IP, User-Agent, timestamp, userId y tokenId.
+
+### Tablas nuevas
+- `PasswordResetToken` — token hash (SHA-256), expiración 15 min, single-use, invalida previos
+- `PasswordResetAudit` — traza inmutable: `REQUESTED`, `VERIFIED`, `USED`, `EXPIRED`, `INVALID`
+
+### Endpoints
+
+| Método | Ruta | Acceso | Body | Descripción |
+|---|---|---|---|---|
+| POST | `/account-recovery/request` | Público | `{ "email": "user@ejemplo.com" }` | Genera token, guarda hash, auditoría `REQUESTED`. Rate limit: 3/hora por usuario. Cuentas solo Google bloqueadas. |
+| POST | `/account-recovery/verify` | Público | `{ "token": "..." }` | Valida sin consumir. Auditoría `VERIFIED` / `INVALID` / `EXPIRED`. |
+| POST | `/account-recovery/reset` | Público | `{ "token": "...", "newPassword": "nueva123" }` | Cambia contraseña, marca `usedAt`, auditoría `USED`. Mínimo 6 chars. |
+| GET | `/account-recovery/audit` | Logueado (JWT) | — | Historial completo del usuario autenticado. |
+
+### Respuestas de ejemplo
+
+**Request (dev):**
+```json
+{
+  "message": "Si el correo existe, recibirás instrucciones.",
+  "devToken": "a1b2c3...",
+  "devExpiresAt": "2026-11-08T12:00:00.000Z"
+}
+```
+> `devToken` y `devExpiresAt` solo en desarrollo. En producción eliminar y enviar por email real.
+
+**Verify:**
+```json
+{ "valid": true, "userId": "uuid", "email": "user@ejemplo.com" }
+```
+
+**Reset:**
+```json
+{ "message": "Contraseña actualizada correctamente." }
+```
+
+**Audit (GET):**
+```json
+[
+  { "id": "...", "action": "USED", "ipAddress": "::1", "userAgent": "curl/8.18.0", "details": { "passwordChanged": true }, "createdAt": "...", "token": { "id": "...", "expiresAt": "...", "usedAt": "..." } },
+  { "id": "...", "action": "VERIFIED", "ipAddress": "::1", "userAgent": "curl/8.18.0", "details": { "tokenId": "..." }, "createdAt": "...", "token": null },
+  { "id": "...", "action": "REQUESTED", "ipAddress": "::1", "userAgent": "curl/8.18.0", "details": { "tokenId": "...", "expiresAt": "..." }, "createdAt": "...", "token": null }
+]
+```
+
+### Seguridad
+- Rate limit: **3 requests/hora** por usuario (configurable en `AccountRecoveryService`)
+- Token en claro **solo en respuesta dev** — quitar en producción
+- Email real pendiente (TODO: integrar servicio de email)
+- Cuentas solo Google (`passwordHash=null`) bloqueadas para reset por email
+- Respuesta genérica aunque email no exista (previene user enumeration)
+- Tokens previos sin usar se invalidan al solicitar uno nuevo
+
 | Método | Ruta | Acceso | Detalle |
 |---|---|---|---|
 | GET | `/place-images` | Público | Todas las miniaturas guardadas: `[{ placeId, mime, data (Base32), updatedAt }]` |

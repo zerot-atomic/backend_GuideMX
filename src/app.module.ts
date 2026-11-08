@@ -13,6 +13,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { PlaceImagesModule } from './place-images/place-images.module';
 import { VisitsModule } from './visits/visits.module';
+import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { VisitsModule } from './visits/visits.module';
     UploadsModule,
     PlaceImagesModule,
     VisitsModule,
+    AccountRecoveryModule,
   ],
   providers: [
     {

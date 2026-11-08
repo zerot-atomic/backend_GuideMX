@@ -76,16 +76,18 @@ model PlaceImage {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  passwordHash String?
-  googleId     String?  @unique
-  name         String
-  role         Role       @default(user)
-  favorites    Favorite[]
-  reviews      Review[]
-  visits       Visit[]
-  createdAt    DateTime   @default(now())
+  id                    String     @id @default(uuid())
+  email                 String     @unique
+  passwordHash          String?
+  googleId              String?  @unique
+  name                  String
+  role                  Role       @default(user)
+  favorites             Favorite[]
+  reviews               Review[]
+  visits                Visit[]
+  passwordResetTokens   PasswordResetToken[]
+  passwordResetAudits   PasswordResetAudit[]
+  createdAt             DateTime   @default(now())
 }
 
 model Favorite {
@@ -129,4 +131,37 @@ model Visit {
 
   @@unique([userId, placeId])
   @@index([userId])
+}
+
+// Tokens de recuperación de contraseña (un solo uso, expiración corta)
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audits    PasswordResetAudit[]
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Auditoría completa de cada intento de recuperación
+// action: REQUESTED | VERIFIED | USED | EXPIRED | INVALID
+model PasswordResetAudit {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenId   String?
+  action    String
+  ipAddress String?
+  userAgent String?
+  details   Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     PasswordResetToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
 }
