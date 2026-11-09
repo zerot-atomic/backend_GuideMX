@@ -152,14 +152,14 @@ model PasswordResetToken {
 // action: REQUESTED | VERIFIED | USED | EXPIRED | INVALID
 model PasswordResetAudit {
   id        String   @id @default(uuid())
-  userId    String
+  userId    String?
   tokenId   String?
   action    String
   ipAddress String?
   userAgent String?
   details   Json?
   createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   token     PasswordResetToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
 
   @@index([userId])

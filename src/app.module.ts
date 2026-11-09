@@ -14,6 +14,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { PlaceImagesModule } from './place-images/place-images.module';
 import { VisitsModule } from './visits/visits.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -33,6 +34,12 @@ import { AccountRecoveryModule } from './account-recovery/account-recovery.modul
         GOOGLE_CLIENT_ID: Joi.string().allow('').optional(),
         GOOGLE_CLIENT_SECRET: Joi.string().allow('').optional(),
         GOOGLE_CALLBACK_URL: Joi.string().allow('').optional(),
+        MAIL_HOST: Joi.string().default('smtp.gmail.com'),
+        MAIL_PORT: Joi.number().default(587),
+        MAIL_SECURE: Joi.string().allow('').optional(),
+        MAIL_USER: Joi.string().allow('').optional(),
+        MAIL_PASS: Joi.string().allow('').optional(),
+        MAIL_FROM: Joi.string().allow('').optional(),
       }),
     }),
     // Límite de peticiones por IP: 100 requests cada 60 segundos por default.
@@ -48,6 +55,7 @@ import { AccountRecoveryModule } from './account-recovery/account-recovery.modul
     PlaceImagesModule,
     VisitsModule,
     AccountRecoveryModule,
+    EmailModule,
   ],
   providers: [
     {

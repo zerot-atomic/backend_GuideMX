@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 
 const TOKEN_LENGTH = 4;
 const TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -26,7 +27,10 @@ export type RecoveryAction =
 export class AccountRecoveryService {
   private readonly logger = new Logger(AccountRecoveryService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Solicita recuperación de contraseña.
@@ -162,8 +166,14 @@ export class AccountRecoveryService {
 
     this.logger.log(`reset-request: token creado userId=${user.id} tokenId=${token.id}`);
 
-    // TODO: Enviar email real con rawToken
-    // await this.emailService.sendResetEmail(user.email, user.name, rawToken);
+    // Enviar email con token
+    try {
+      await this.emailService.sendResetEmail(user.email, user.name, rawToken);
+      this.logger.log(`reset-request: email enviado userId=${user.id} email=${user.email}`);
+    } catch (e) {
+      this.logger.error(`reset-request: error enviando email userId=${user.id}`, (e as Error).stack);
+      // No fallar la request si falla el email (el token ya está guardado)
+    }
 
     return { message: 'Si el correo existe, recibirás instrucciones.' };
   }
