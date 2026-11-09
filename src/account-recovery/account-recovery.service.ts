@@ -7,9 +7,13 @@ import {
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
-const TOKEN_BYTES = 32;
+const TOKEN_LENGTH = 4;
+const TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const TOKEN_TTL_MINUTES = 15;
 const MAX_ATTEMPTS_PER_HOUR = 3;
+const MAX_ATTEMPTS_PER_IP_PER_HOUR = 5;
+const MAX_ATTEMPTS_PER_EMAIL_PER_HOUR = 10;
+const BLOCK_DURATION_MINUTES = 15;
 
 export type RecoveryAction =
   | 'REQUESTED'
@@ -31,16 +35,66 @@ export class AccountRecoveryService {
    * - Rate limit: máx 3 peticiones/hora por usuario.
    */
   async requestReset(email: string, ip?: string, userAgent?: string) {
+    const normalizedEmail = email.toLowerCase();
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: normalizedEmail },
       select: { id: true, email: true, name: true, passwordHash: true },
     });
+
+    // Rate limit por email (para emails existentes y no existentes) - respuesta directa
+    const recentEmailRequests = await this.prisma.passwordResetAudit.count({
+      where: {
+        details: { path: ['email'], equals: normalizedEmail },
+        action: 'REQUESTED',
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+      },
+    });
+
+    if (recentEmailRequests >= MAX_ATTEMPTS_PER_EMAIL_PER_HOUR) {
+      this.logger.warn(
+        `reset-request: rate limit email excedido email=${normalizedEmail} ip=${ip ?? '?'}`,
+      );
+      await this.audit(user?.id ?? null, 'REQUESTED', ip, userAgent, {
+        email: normalizedEmail,
+        reason: 'email_rate_limited',
+        attempts: recentEmailRequests,
+      });
+      return {
+        message:
+          'Demasiadas solicitudes para este correo. Espera 10-15 minutos antes de intentarlo de nuevo.',
+        blocked: true,
+        retryAfterMinutes: BLOCK_DURATION_MINUTES,
+      };
+    }
+
+    // Rate limit por IP (para emails inexistentes y existentes)
+    const recentIpRequests = await this.prisma.passwordResetAudit.count({
+      where: {
+        ipAddress: ip,
+        action: 'REQUESTED',
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+      },
+    });
+
+    if (recentIpRequests >= MAX_ATTEMPTS_PER_IP_PER_HOUR) {
+      this.logger.warn(
+        `reset-request: rate limit IP excedido ip=${ip ?? '?'}`,
+      );
+      await this.audit(null, 'REQUESTED', ip, userAgent, {
+        email: normalizedEmail,
+        reason: 'ip_rate_limited',
+        attempts: recentIpRequests,
+      });
+      throw new BadRequestException(
+        'Demasiadas solicitudes desde esta IP. Intenta de nuevo en una hora.',
+      );
+    }
 
     // Siempre respondemos OK para no revelar si el email existe (seguridad)
     if (!user) {
       this.logger.warn(`reset-request: email no existe ip=${ip ?? '?'}`);
       await this.audit(null, 'REQUESTED', ip, userAgent, {
-        email,
+        email: normalizedEmail,
         reason: 'user_not_found',
       });
       return { message: 'Si el correo existe, recibirás instrucciones.' };
@@ -52,14 +106,14 @@ export class AccountRecoveryService {
         `reset-request: cuenta solo Google ip=${ip ?? '?'} userId=${user.id}`,
       );
       await this.audit(user.id, 'REQUESTED', ip, userAgent, {
-        email,
+        email: normalizedEmail,
         reason: 'google_only_account',
       });
       return { message: 'Si el correo existe, recibirás instrucciones.' };
     }
 
-    // Rate limit: contar peticiones en la última hora
-    const recentRequests = await this.prisma.passwordResetAudit.count({
+    // Rate limit por usuario
+    const recentUserRequests = await this.prisma.passwordResetAudit.count({
       where: {
         userId: user.id,
         action: 'REQUESTED',
@@ -67,21 +121,21 @@ export class AccountRecoveryService {
       },
     });
 
-    if (recentRequests >= MAX_ATTEMPTS_PER_HOUR) {
+    if (recentUserRequests >= MAX_ATTEMPTS_PER_HOUR) {
       this.logger.warn(
-        `reset-request: rate limit excedido userId=${user.id} ip=${ip ?? '?'}`,
+        `reset-request: rate limit user excedido userId=${user.id} ip=${ip ?? '?'}`,
       );
       await this.audit(user.id, 'REQUESTED', ip, userAgent, {
         reason: 'rate_limited',
-        attempts: recentRequests,
+        attempts: recentUserRequests,
       });
       throw new BadRequestException(
         'Demasiadas solicitudes. Intenta de nuevo en una hora.',
       );
     }
 
-    // Generar token seguro
-    const rawToken = crypto.randomBytes(TOKEN_BYTES).toString('hex');
+    // Generar token alfanumérico de 6 caracteres
+    const rawToken = this.generateToken();
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES * 60 * 1000);
 
@@ -111,12 +165,7 @@ export class AccountRecoveryService {
     // TODO: Enviar email real con rawToken
     // await this.emailService.sendResetEmail(user.email, user.name, rawToken);
 
-    return {
-      message: 'Si el correo existe, recibirás instrucciones.',
-      // SOLO PARA DESARROLLO/TESTING - eliminar en producción
-      devToken: rawToken,
-      devExpiresAt: expiresAt.toISOString(),
-    };
+    return { message: 'Si el correo existe, recibirás instrucciones.' };
   }
 
   /**
@@ -272,6 +321,14 @@ export class AccountRecoveryService {
     });
     this.logger.log(`cleanup: ${result.count} tokens expirados eliminados`);
     return result.count;
+  }
+
+  private generateToken(): string {
+    let token = '';
+    for (let i = 0; i < TOKEN_LENGTH; i++) {
+      token += TOKEN_CHARS.charAt(crypto.randomInt(TOKEN_CHARS.length));
+    }
+    return token;
   }
 
   private hashToken(token: string): string {
