@@ -8,6 +8,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Headers,
 } from '@nestjs/common';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 import { AccountRecoveryService } from './account-recovery.service';
@@ -43,8 +44,17 @@ export class AccountRecoveryController {
   async requestReset(
     @Body() dto: RequestResetDto,
     @Request() req: any,
+    @Headers('x-forwarded-for') forwardedFor?: string,
   ) {
-    return this.recovery.requestReset(dto.email, req.ip, req.headers['user-agent']);
+    const ip = this.getClientIp(req, forwardedFor);
+    return this.recovery.requestReset(dto.email, ip, req.headers['user-agent']);
+  }
+
+  private getClientIp(req: any, forwardedFor?: string): string {
+    if (forwardedFor) {
+      return forwardedFor.split(',')[0].trim();
+    }
+    return req.ip || 'unknown';
   }
 
   @Post('verify')
@@ -52,8 +62,10 @@ export class AccountRecoveryController {
   async verifyToken(
     @Body() dto: VerifyTokenDto,
     @Request() req: any,
+    @Headers('x-forwarded-for') forwardedFor?: string,
   ) {
-    return this.recovery.verifyToken(dto.token, req.ip, req.headers['user-agent']);
+    const ip = this.getClientIp(req, forwardedFor);
+    return this.recovery.verifyToken(dto.token, ip, req.headers['user-agent']);
   }
 
   @Post('reset')
@@ -61,11 +73,13 @@ export class AccountRecoveryController {
   async resetPassword(
     @Body() dto: ResetPasswordDto,
     @Request() req: any,
+    @Headers('x-forwarded-for') forwardedFor?: string,
   ) {
+    const ip = this.getClientIp(req, forwardedFor);
     return this.recovery.resetPassword(
       dto.token,
       dto.newPassword,
-      req.ip,
+      ip,
       req.headers['user-agent'],
     );
   }
