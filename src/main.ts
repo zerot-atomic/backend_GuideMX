@@ -7,7 +7,8 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.set('trust proxy', true);
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', true);
   app.use(helmet());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(
