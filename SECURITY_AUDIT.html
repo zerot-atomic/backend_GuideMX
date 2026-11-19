@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MXGuide Backend — Security Audit Report</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --critical: #f85149;
+      --medium: #d29922;
+      --low: #3fb950;
+      --table-bg: #161b22;
+      --table-border: #30363d;
+      --code-bg: #161b22;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --fg: #1f2328;
+        --muted: #656d76;
+        --accent: #0969da;
+        --critical: #cf222e;
+        --medium: #9a6700;
+        --low: #2da44e;
+        --table-bg: #f6f8fa;
+        --table-border: #d0d7de;
+        --code-bg: #f6f8fa;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+    h1 { font-size: 2.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.5rem; font-weight: 600; margin-top: 3rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--table-border); }
+    h3 { font-size: 1.125rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.5rem; }
+    .meta { color: var(--muted); margin-bottom: 2rem; font-size: 0.95rem; }
+    .summary-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+    .summary-table th, .summary-table td { padding: 0.75rem 1rem; text-align: left; border: 1px solid var(--table-border); }
+    .summary-table th { background: var(--table-bg); font-weight: 600; }
+    .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+    .badge-critical { background: var(--critical); color: white; }
+    .badge-medium { background: var(--medium); color: white; }
+    .badge-low { background: var(--low); color: white; }
+    table.vuln-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+    table.vuln-table th, table.vuln-table td { padding: 0.625rem 0.75rem; border: 1px solid var(--table-border); vertical-align: top; }
+    table.vuln-table th { background: var(--table-bg); font-weight: 600; position: sticky; top: 0; }
+    table.vuln-table tr:nth-child(even) { background: var(--table-bg); }
+    table.vuln-table td:first-child { font-weight: 600; font-family: monospace; white-space: nowrap; }
+    .loc { font-family: monospace; font-size: 0.8rem; color: var(--muted); }
+    code { background: var(--code-bg); padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875em; }
+    pre { background: var(--code-bg); padding: 1rem; border-radius: 8px; overflow-x: auto; border: 1px solid var(--table-border); }
+    pre code { background: none; padding: 0; }
+    .plan-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+    .plan-table th, .plan-table td { padding: 0.75rem 1rem; border: 1px solid var(--table-border); }
+    .plan-table th { background: var(--table-bg); }
+    .checklist-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+    .checklist-table th, .checklist-table td { padding: 0.75rem 1rem; border: 1px solid var(--table-border); }
+    .checklist-table th { background: var(--table-bg); }
+    .section-critical h2 { color: var(--critical); border-color: var(--critical); }
+    .section-medium h2 { color: var(--medium); border-color: var(--medium); }
+    .section-low h2 { color: var(--low); border-color: var(--low); }
+    @media print {
+      body { padding: 0; max-width: none; }
+      h2 { page-break-before: auto; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  <h1>MXGuide Backend — Security Audit Report</h1>
+  <div class="meta">
+    <strong>Date:</strong> 2026-11-13<br>
+    <strong>Scope:</strong> Full backend (NestJS + Prisma + PostgreSQL)<br>
+    <strong>Method:</strong> Manual code review, configuration analysis, architecture assessment
+  </div>
+
+  <h2>Executive Summary</h2>
+  <table class="summary-table">
+    <thead>
+      <tr><th>Severity</th><th>Count</th><th>SLA</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="badge badge-critical">Critical</span></td><td>10</td><td>≤ 2 weeks</td></tr>
+      <tr><td><span class="badge badge-medium">Medium</span></td><td>32</td><td>—</td></tr>
+      <tr><td><span class="badge badge-low">Low</span></td><td>27</td><td>≤ 6 months</td></tr>
+      <tr><td><strong>Total</strong></td><td><strong>69</strong></td><td></td></tr>
+    </tbody>
+  </table>
+
+  <section class="section-critical">
+    <h2>🔴 CRITICAL — Fix within 2 weeks</h2>
+    <table class="vuln-table">
+      <thead>
+        <tr><th>#</th><th>Vulnerability</th><th>Location</th><th>Exploitability</th><th>Impact</th></tr>
+      </thead>
+      <tbody>
+        <tr style="opacity: 0.6;">
+          <td>C1</td>
+          <td><strong>4-char password reset token (36^4 = 1.6M combinations)</strong> <span style="color: var(--low);">✓ FIXED in 75f7468</span></td>
+          <td class="loc">account-recovery.service.ts:11-12</td>
+          <td>HIGH — Online brute-force feasible within rate limits (1000/hr IP = 1.6M/1667hr ≈ 70 days; distributed botnet = hours)</td>
+          <td>Full account takeover via password reset</td>
+        </tr>
+        <tr>
+          <td>C2</td>
+          <td><strong>JWT_SECRET used directly for token signing (no rotation in JwtStrategy)</strong></td>
+          <td class="loc">jwt.strategy.ts:11, auth.module.ts:14</td>
+          <td>HIGH — Static secret never rotates; JwtKeyService rotates but is <strong>unused</strong> by Passport strategy</td>
+          <td>Long-term token forgery, impersonation</td>
+        </tr>
+        <tr>
+          <td>C3</td>
+          <td><strong>Google OAuth dummy credentials allow unauthenticated startup</strong></td>
+          <td class="loc">google.strategy.ts:11-12</td>
+          <td>MEDIUM — Server starts with <code>not-configured</code>; OAuth flow fails silently or exposes misconfiguration</td>
+          <td>Auth bypass if misconfigured in prod; credential leakage risk</td>
+        </tr>
+        <tr>
+          <td>C4</td>
+          <td><strong>CORS enabled with no origin restrictions</strong></td>
+          <td class="loc">main.ts:21</td>
+          <td>HIGH — <code>app.enableCors()</code> allows all origins, credentials</td>
+          <td>CSRF, data exfiltration via malicious sites</td>
+        </tr>
+        <tr>
+          <td>C5</td>
+          <td><strong>Helmet defaults only — no CSP, no HSTS preload, no frame-ancestors</strong></td>
+          <td class="loc">main.ts:12</td>
+          <td>MEDIUM — XSS, clickjacking, MIME sniffing</td>
+          <td>Client-side attacks, credential theft</td>
+        </tr>
+        <tr>
+          <td>C6</td>
+          <td><strong>Rate limit: 100 req/min global — too permissive for auth endpoints</strong></td>
+          <td class="loc">app.module.ts:46</td>
+          <td>HIGH — Login, register, password reset share generic limit</td>
+          <td>Credential stuffing, enumeration, DoS</td>
+        </tr>
+        <tr>
+          <td>C7</td>
+          <td><strong>Password reset rate limit bypass: email check returns 200 for non-existent users</strong></td>
+          <td class="loc">account-recovery.service.ts:98-105</td>
+          <td>MEDIUM — Attacker can enumerate valid emails via timing or response differences</td>
+          <td>User enumeration, targeted attacks</td>
+        </tr>
+        <tr>
+          <td>C8</td>
+          <td><strong>No password complexity requirements (min 6 chars only)</strong></td>
+          <td class="loc">register.dto.ts:8, login.dto.ts:7</td>
+          <td>HIGH — Weak passwords accepted, no breach detection</td>
+          <td>Credential stuffing success, account compromise</td>
+        </tr>
+        <tr>
+          <td>C9</td>
+          <td><strong>bcrypt cost factor 10 (low for 2026)</strong></td>
+          <td class="loc">account-recovery.service.ts:274</td>
+          <td>MEDIUM — GPU cracking ~100k H/s per GPU</td>
+          <td>Offline hash cracking if DB leaked</td>
+        </tr>
+        <tr>
+          <td>C10</td>
+          <td><strong>JWT expires in 7d default — no refresh token rotation</strong></td>
+          <td class="loc">auth.module.ts:15, .env.example:6</td>
+          <td>MEDIUM — Long-lived access tokens, no revocation mechanism</td>
+          <td>Token theft = 7-day access</td>
+        </tr>
+        <tr>
+          <td>C11</td>
+          <td><strong>File upload: no validation of file type, size, or content</strong></td>
+          <td class="loc">uploads.service.ts, uploads.controller.ts</td>
+          <td>HIGH — Cloudinary accepts any file; no MIME/size checks server-side</td>
+          <td>Malicious file upload, stored XSS via SVG, DoS via large files</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section-medium">
+    <h2>🟡 MEDIUM — Fix in normal sprint cycle</h2>
+    <table class="vuln-table">
+      <thead>
+        <tr><th>#</th><th>Vulnerability</th><th>Location</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>M1</td><td><strong>Raw SQL in findNearby uses template interpolation</strong></td><td class="loc">places.service.ts:15-30</td><td>Uses <code>$queryRaw</code> with <code>${lat}</code>, <code>${lng}</code>, <code>${radius}</code> — Prisma escapes but template strings risky if modified</td></tr>
+        <tr><td>M2</td><td><strong>Audit log <code>userId</code> stored as 'unknown' string for null</strong></td><td class="loc">account-recovery.service.ts:358</td><td>Breaks FK integrity, query confusion; should be nullable</td></tr>
+        <tr><td>M3</td><td><strong>Audit <code>details</code> stored as Json without schema validation</strong></td><td class="loc">schema.prisma:160</td><td>Potential injection via prototype pollution if deserialized unsafely</td></tr>
+        <tr><td>M4</td><td><strong>No request size limit (body parser default)</strong></td><td class="loc">main.ts</td><td>DoS via large payloads; add <code>bodyParser</code> limit</td></tr>
+        <tr><td>M5</td><td><strong>No API versioning strategy</strong></td><td class="loc">All controllers</td><td>Breaking changes risk; add prefix <code>/v1</code></td></tr>
+        <tr><td>M6</td><td><strong>Swagger/OpenAPI not configured</strong></td><td class="loc">—</td><td>No contract testing, no security scheme docs</td></tr>
+        <tr><td>M7</td><td><strong>Google OAuth state parameter not validated</strong></td><td class="loc">google.strategy.ts</td><td>CSRF on OAuth flow; Passport handles but verify</td></tr>
+        <tr><td>M8</td><td><strong>JWT <code>ignoreExpiration: false</code> but no clock skew tolerance</strong></td><td class="loc">jwt.strategy.ts:10</td><td>Legitimate tokens rejected on minor time drift</td></tr>
+        <tr><td>M9</td><td><strong>Password reset token cleanup job not scheduled</strong></td><td class="loc">account-recovery.service.ts:328</td><td><code>cleanupExpiredTokens</code> exists but no cron; DB bloat</td></tr>
+        <tr><td>M10</td><td><strong>Email template uses <code>{{token}}</code> directly — no escaping</strong></td><td class="loc">reset-password.hbs:23</td><td>Template injection unlikely but confirm Handlebars config</td></tr>
+        <tr><td>M11</td><td><strong>No security headers beyond Helmet defaults</strong></td><td class="loc">main.ts:12</td><td>Missing: <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, <code>Cross-Origin-Embedder-Policy</code></td></tr>
+        <tr><td>M12</td><td><strong>Trust proxy enabled but no IP validation</strong></td><td class="loc">main.ts:11</td><td>Relies on Render/X-Forwarded-For; spoofable if not behind trusted proxy</td></tr>
+        <tr><td>M13</td><td><strong>Role guard: no default deny, allows if no roles defined</strong></td><td class="loc">roles.guard.ts:14</td><td>Endpoints without <code>@Roles()</code> accessible by any authenticated user</td></tr>
+        <tr><td>M14</td><td><strong>No audit logging for auth events (login, register, token refresh)</strong></td><td class="loc">auth.service.ts</td><td>Only password reset has audit trail</td></tr>
+        <tr><td>M15</td><td><strong>Password history not enforced on reset</strong></td><td class="loc">account-recovery.service.ts:274</td><td>User can reuse current password</td></tr>
+        <tr><td>M16</td><td><strong>No account lockout after failed login attempts</strong></td><td class="loc">auth.service.ts:40-53</td><td>Only password reset has rate limiting</td></tr>
+        <tr><td>M17</td><td><strong>Google-only accounts can't reset password but error message identical</strong></td><td class="loc">account-recovery.service.ts:108-117</td><td>UX issue; attacker learns account type via timing</td></tr>
+        <tr><td>M18</td><td><strong><code>updateMe</code> allows password change without current password for Google accounts</strong></td><td class="loc">auth.service.ts:150-177</td><td>Logic gap: Google accounts have no <code>currentPassword</code></td></tr>
+        <tr><td>M19</td><td><strong>No CORS preflight cache control</strong></td><td class="loc">main.ts:21</td><td>Repeated OPTIONS requests</td></tr>
+        <tr><td>M20</td><td><strong>Prisma <code>postgis</code> extension enabled — attack surface if not used</strong></td><td class="loc">schema.prisma:8</td><td>Reduce attack surface; disable if unused</td></tr>
+        <tr><td>M21</td><td><strong>No database connection pooling limits configured</strong></td><td class="loc">prisma.service.ts</td><td>Default pool may exhaust DB under load</td></tr>
+        <tr><td>M22</td><td><strong>Error filter logs stack traces for 500 errors</strong></td><td class="loc">all-exceptions.filter.ts:38-39</td><td>Potential info leak in logs (paths, queries)</td></tr>
+        <tr><td>M23</td><td><strong>No request ID / correlation ID for tracing</strong></td><td class="loc">—</td><td>Debugging and audit correlation difficult</td></tr>
+        <tr><td>M24</td><td><strong>Email <code>MAIL_PASS</code> in env — no secret manager integration</strong></td><td class="loc">.env.example:26</td><td>Credentials in plaintext env</td></tr>
+        <tr><td>M25</td><td><strong>Cloudinary credentials optional but no validation if used</strong></td><td class="loc">uploads.service.ts:9-11</td><td>Silent failure if misconfigured</td></tr>
+        <tr><td>M26</td><td><strong>No health check / readiness endpoint</strong></td><td class="loc">—</td><td>K8s/Render cannot probe properly</td></tr>
+        <tr><td>M27</td><td><strong>No structured logging (JSON) for SIEM integration</strong></td><td class="loc">main.ts, services</td><td>Logs are human-readable only</td></tr>
+        <tr><td>M28</td><td><strong>JWT key rotation writes to local filesystem</strong></td><td class="loc">jwt-key.service.ts:16,45</td><td>Not shared across instances; breaks in multi-replica deployments</td></tr>
+        <tr><td>M29</td><td><strong>No rate limit on <code>/auth/google</code> mobile endpoint</strong></td><td class="loc">auth.controller.ts:29-32</td><td>Token validation DoS</td></tr>
+        <tr><td>M30</td><td><strong>Places <code>findAll</code> limit default 2000 — potential DoS</strong></td><td class="loc">places.service.ts:45</td><td>Large result sets; add max cap</td></tr>
+        <tr><td>M31</td><td><strong>No input sanitization on text fields (descriptions, names)</strong></td><td class="loc">DTOs use <code>IsString</code> only</td><td>XSS risk if reflected in web views</td></tr>
+        <tr><td>M32</td><td><strong>Dependencies not pinned to exact versions</strong></td><td class="loc">package.json</td><td>Supply chain risk; use <code>npm ci</code> + lockfile</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section-low">
+    <h2>🟢 LOW — Fix within 6 months</h2>
+    <table class="vuln-table">
+      <thead>
+        <tr><th>#</th><th>Improvement</th><th>Location</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>L1</td><td>Increase password reset token to 8 chars (36^8 = 2.8T)</td><td class="loc">account-recovery.service.ts:11-12</td><td>Eliminates online brute-force</td></tr>
+        <tr><td>L2</td><td>Integrate JwtKeyService with JwtStrategy (dynamic secret)</td><td class="loc">jwt.strategy.ts, jwt-key.service.ts</td><td>Enable true key rotation</td></tr>
+        <tr><td>L3</td><td>Add Content Security Policy (CSP) with nonce/hash</td><td class="loc">main.ts</td><td>Defense-in-depth against XSS</td></tr>
+        <tr><td>L4</td><td>Add HSTS preload, frame-ancestors, referrer-policy</td><td class="loc">main.ts</td><td>Hardening</td></tr>
+        <tr><td>L5</td><td>Implement per-endpoint rate limiting (throttler guards)</td><td class="loc">app.module.ts, controllers</td><td>Auth: 5/min; API: 60/min; Upload: 10/min</td></tr>
+        <tr><td>L6</td><td>Add password strength meter (zxcvbn) + breach check (HIBP)</td><td class="loc">register.dto.ts, auth.service.ts</td><td>Reduce weak passwords</td></tr>
+        <tr><td>L7</td><td>Increase bcrypt cost to 12-14</td><td class="loc">account-recovery.service.ts:274, auth.service.ts</td><td>Slow offline cracking</td></tr>
+        <tr><td>L8</td><td>Add refresh token rotation with reuse detection</td><td class="loc">auth.service.ts, auth.module.ts</td><td>Limit token theft window</td></tr>
+        <tr><td>L9</td><td>Add password history (last 5) on reset/change</td><td class="loc">account-recovery.service.ts, auth.service.ts</td><td>Prevent reuse</td></tr>
+        <tr><td>L10</td><td>Add account lockout after 5 failed logins (15 min)</td><td class="loc">auth.service.ts</td><td>Mitigate credential stuffing</td></tr>
+        <tr><td>L11</td><td>Add request size limit (1MB default, 10MB for upload)</td><td class="loc">main.ts</td><td>DoS prevention</td></tr>
+        <tr><td>L12</td><td>Add API versioning (<code>/v1</code> prefix)</td><td class="loc">main.ts, controllers</td><td>Safe evolution</td></tr>
+        <tr><td>L13</td><td>Configure Swagger with security schemes</td><td class="loc">main.ts</td><td>Documentation, testing</td></tr>
+        <tr><td>L14</td><td>Validate Google OAuth <code>state</code> parameter explicitly</td><td class="loc">google.strategy.ts</td><td>CSRF defense</td></tr>
+        <tr><td>L15</td><td>Schedule token cleanup cron (daily)</td><td class="loc">account-recovery.service.ts:328</td><td>DB hygiene</td></tr>
+        <tr><td>L16</td><td>Add security headers: Permissions-Policy, COEP, CORP</td><td class="loc">main.ts</td><td>Hardening</td></tr>
+        <tr><td>L17</td><td>Fix audit <code>userId</code> nullable schema</td><td class="loc">schema.prisma:155</td><td>Data integrity</td></tr>
+        <tr><td>L18</td><td>Add structured JSON logging + request IDs</td><td class="loc">main.ts, services</td><td>Observability, SIEM</td></tr>
+        <tr><td>L19</td><td>Move secrets to secret manager (AWS/GCP/Azure/Vault)</td><td class="loc">.env.example, config</td><td>Credential hygiene</td></tr>
+        <tr><td>L20</td><td>Add health/readiness endpoints</td><td class="loc">New controller</td><td>Orchestration</td></tr>
+        <tr><td>L21</td><td>Validate file MIME type + size before Cloudinary upload</td><td class="loc">uploads.service.ts, uploads.controller.ts</td><td>Prevent malicious uploads</td></tr>
+        <tr><td>L22</td><td>Add max limit cap on pagination (e.g., 100)</td><td class="loc">places.service.ts, reviews.service.ts</td><td>DoS prevention</td></tr>
+        <tr><td>L23</td><td>Sanitize HTML/text inputs (DOMPurify or similar)</td><td class="loc">DTOs, services</td><td>XSS prevention</td></tr>
+        <tr><td>L24</td><td>Pin dependencies to exact versions + enable <code>npm audit</code> CI</td><td class="loc">package.json, CI</td><td>Supply chain</td></tr>
+        <tr><td>L25</td><td>Add integration tests for auth flows</td><td class="loc">—</td><td>Regression prevention</td></tr>
+        <tr><td>L26</td><td>Add rate limit on password reset verify/reset endpoints</td><td class="loc">account-recovery.controller.ts</td><td>Prevent token brute-force</td></tr>
+        <tr><td>L27</td><td>Document threat model and data flow diagrams</td><td class="loc">—</td><td>Security architecture</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <h2>Priority Remediation Plan</h2>
+  <h3>Week 1 (Critical)</h3>
+  <table class="plan-table">
+    <thead><tr><th>Fix</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td>C2</td><td>Wire JwtKeyService into JwtStrategy (refactor secret loading)</td></tr>
+      <tr><td>C4</td><td>Restrict CORS to known origins</td></tr>
+      <tr><td>C5</td><td>Configure Helmet with CSP, HSTS, frame-ancestors</td></tr>
+      <tr><td>C6</td><td>Add per-endpoint throttler guards for auth endpoints</td></tr>
+      <tr><td>C11</td><td>Add file validation (MIME, size, magic bytes)</td></tr>
+    </tbody>
+  </table>
+  <h3>Week 2 (Critical cont.)</h3>
+  <table class="plan-table">
+    <thead><tr><th>Fix</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td>C3</td><td>Fail fast if Google OAuth not configured in prod</td></tr>
+      <tr><td>C7</td><td>Constant-time email existence response (already OK but verify timing)</td></tr>
+      <tr><td>C8</td><td>Enforce password policy (min 12, complexity, HIBP check)</td></tr>
+      <tr><td>C9</td><td>Increase bcrypt cost to 12</td></tr>
+      <tr><td>C10</td><td>Implement refresh token rotation</td></tr>
+    </tbody>
+  </table>
+  <h3>Sprint 1-2 (Medium)</h3>
+  <p>M1, M2, M4, M5, M9, M13, M14, M15, M16, M19, M21, M22, M26, M28, M30, M32</p>
+  <h3>Quarter 1 (Low)</h3>
+  <p>All L1-L27 as capacity allows</p>
+
+  <h2>Validation Checklist for Critical Fixes</h2>
+  <table class="checklist-table">
+    <thead><tr><th>Fix</th><th>Test</th></tr></thead>
+    <tbody>
+      <tr><td>C2: Key rotation</td><td>Deploy 2 replicas; rotate key; verify both accept old+new</td></tr>
+      <tr><td>C4: CORS</td><td><code>curl -H "Origin: https://evil.com" -v</code> → no <code>Access-Control-Allow-Origin</code></td></tr>
+      <tr><td>C5: CSP</td><td>Load page; check <code>Content-Security-Policy</code> header; test inline script blocked</td></tr>
+      <tr><td>C6: Auth rate limit</td><td>Burst 10 login requests → 429 after 5</td></tr>
+      <tr><td>C11: Upload validation</td><td>Upload <code>.svg</code> with script → reject; upload 50MB → reject</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Notes</h2>
+  <ul>
+    <li><strong>JwtKeyService exists but is unused</strong> — this is the single biggest architectural gap. The rotating key infrastructure is built but Passport JWT strategy reads static <code>JWT_SECRET</code> from env.</li>
+    <li><strong>Password reset token entropy</strong> <span style="color: var(--low);">✓ FIXED in 75f7468 (6 chars)</span></li>
+    <li><strong>CORS + missing CSP</strong> = client-side attack surface wide open.</li>
+    <li><strong>No per-endpoint rate limiting</strong> on auth = credential stuffing trivial.</li>
+    <li><strong>File upload</strong> trusts Cloudinary entirely; no server-side validation.</li>
+  </ul>
+
+  <hr style="margin: 3rem 0; border-color: var(--table-border);">
+  <p style="color: var(--muted); font-size: 0.875rem; text-align: center;">
+    End of audit. 69 findings across 3 severity tiers.
+  </p>
+</body>
+</html>
