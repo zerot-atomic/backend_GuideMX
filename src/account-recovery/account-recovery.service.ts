@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 
-const TOKEN_LENGTH = 4;
+const TOKEN_LENGTH = 6;
 const TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const TOKEN_TTL_MINUTES = 15;
 const MAX_ATTEMPTS_PER_HOUR = 3;

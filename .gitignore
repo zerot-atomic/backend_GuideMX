@@ -4,3 +4,5 @@ dist
 *.log
 .DS_Store
 jwt-keys.json
+create-test-user.ts
+SECURITY_AUDIT.html
